@@ -1,0 +1,19 @@
+{
+  "name": "bot-binomo",
+  "version": "1.0.0",
+  "description": "Binomo Bot",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/paulojp-dev/bot-binomo.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/paulojp-dev/bot-binomo/issues"
+  },
+  "homepage": "https://github.com/paulojp-dev/bot-binomo#readme"
+}
