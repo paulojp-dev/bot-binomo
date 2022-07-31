@@ -1,0 +1,2 @@
+# bot-binomo
+Binomo Bot
