@@ -4,6 +4,8 @@
   "description": "Binomo Bot",
   "main": "index.js",
   "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
@@ -15,5 +17,12 @@
   "bugs": {
     "url": "https://github.com/paulojp-dev/bot-binomo/issues"
   },
-  "homepage": "https://github.com/paulojp-dev/bot-binomo#readme"
+  "homepage": "https://github.com/paulojp-dev/bot-binomo#readme",
+  "dependencies": {
+    "dotenv": "^16.0.1",
+    "puppeteer": "^15.5.0"
+  },
+  "devDependencies": {
+    "nodemon": "^2.0.19"
+  }
 }
