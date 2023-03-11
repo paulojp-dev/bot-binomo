@@ -7,6 +7,7 @@ const puppeteer = require('puppeteer');
 
     await page.exposeFunction('log', log)
     await page.exposeFunction('sleep', sleep)
+    await page.exposeFunction('getBalance', getBalance)
 
     await login(page)
     await sleep(4000)
@@ -16,10 +17,27 @@ const puppeteer = require('puppeteer');
         .then(() => log('got it'));
 
     await page.evaluate(observer)
+
+    page.on("pageerror", function (err) {
+        theTempValue = err.toString()
+        console.log("Page error: " + theTempValue)
+    })
+
+    page.on("error", function (err) {
+        theTempValue = err.toString();
+        console.log("Error: " + theTempValue);
+    })
 })();
 
 const sleep = ms => new Promise(res => setTimeout(res, ms))
+
 const log = text => console.log(text)
+
+const getBalance = async context => {
+    const selector = '#qa_trading_balance'
+    const balance = await document.querySelector(selector)
+    return Number(balance.textContent.replace(/[^0-9-]+/g, "")) / 100;
+}
 
 async function observer() {
     const newDate = () => {
@@ -58,24 +76,28 @@ async function observer() {
         log(msg)
     }
 
-    const logLossAttempt = (newResult, actualValue) => {
+    const logLossAttempt = (newResult, actualValue, balanceDiff) => {
         let msg =
             newDate() +
             ' \033[31m LOSS!!!  \x1b[37m {result: ' +
             newResult.toUpperCase() +
             ', value: ' +
             actualValue +
+            ', balanceDiff: ' +
+            new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(balanceDiff) +
             '}'
         log(msg)
     }
 
-    const logWinAttempt = (newResult, actualValue) => {
+    const logWinAttempt = (newResult, actualValue, balanceDiff) => {
         let msg =
             newDate() +
             ' \x1b[32m WIN!!!  \x1b[37m  {result: ' +
             newResult.toUpperCase() +
             ', value: ' +
             actualValue +
+            ', balanceDiff: ' +
+            new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(balanceDiff) +
             '}'
         log(msg)
     }
@@ -149,12 +171,6 @@ async function observer() {
         popupCloseButton.click()
     }
 
-    const getBalance = async context => {
-        const selector = '#qa_trading_balance'
-        const balance = await document.querySelector(selector)
-        return Number(balance.textContent.replace(/[^0-9.-]+/g, ""));
-    }
-
     const getLastResult = async context => {
         const selector = '#qa_trading_tradeHistoryStandardTab > option-item:nth-child(1) > div > div.inner > div.result > p'
         const result = await document.querySelector(selector)
@@ -167,13 +183,20 @@ async function observer() {
     var lossSequenceCount = 0
     var lastAttempt = 'green'
     var lastAttemptValue = 0
-    var breakLimitLoss = false
     var isAgainAttemptLoss = false
+
+    var clearLossConfig = false
+    var goalWinValue = 12
+    var limitLossValue = 8
+    var initialBalance = 0
 
     const observer = new MutationObserver(async mutations => {
         if (firstLoop) {
+            await sleep(300)
+            initialBalance = await getBalance(this) + 5
             await sleep(1000)
             await openResultPanel(this)
+            await sleep(100)
         }
 
         await sleep(1000)
@@ -202,10 +225,17 @@ async function observer() {
 
         await sleep(500)
 
+        let balanceDiff = await getBalance(this) - initialBalance
+
+        if (balanceDiff >= 100) {
+            log('WIN!!! \o/')
+            return
+        }
+
         if (!firstLoop && !loss) {
             isAgainAttemptLoss = false
             lossSequenceCount = 0
-            logWinAttempt(lastAttempt, await getValueInput(this))
+            logWinAttempt(lastAttempt, await getValueInput(this), balanceDiff)
             log('')
             loss = false
             let count = 8
@@ -214,8 +244,20 @@ async function observer() {
                 await downAttemptValue(this)
                 count--
             }
+
+            if ((balanceDiff) >= goalWinValue) {
+                initialBalance = await getBalance(this)
+                // log('WAITING 30min')
+                // await sleep(18000)
+                log('WIN! GOAL WAITING 10min')
+                let minutos = 10
+                await sleep(minutos * 60 * 1000)
+                log('')
+            }
+
             await sleep(200)
             lastAttempt = await execAttempt(this, lastAttempt, loss)
+            // lastAttempt = await execAttempt(this, lastAttempt, Math.floor(Math.random() * 2))
             await sleep(200)
             totalAttempts++
             lastAttemptValue = await getValueInput(this);
@@ -225,15 +267,40 @@ async function observer() {
 
         if (!firstLoop && loss) {
             let result = lastAttempt === 'green' ? 'red' : 'green'
-            let lossValue = lossSequenceCount === 1 ? 15 : await getValueInput(this)
-            logLossAttempt(result, lossValue)
-
             lossSequenceCount++
+            logLossAttempt(result, await getValueInput(this), balanceDiff)
             log('')
 
-            breakLimitLoss = lossSequenceCount > 2
+            if ((balanceDiff * -1) >= limitLossValue) {
+                let count = 8
+                while (count > 1) {
+                    await sleep(200)
+                    await downAttemptValue(this)
+                    count--
+                }
+                initialBalance = await getBalance(this)
+                lossSequenceCount = 0
 
-            if (breakLimitLoss) {
+                // log('WAITING 30min')
+                // await sleep(18000)
+                log('FAIL! GOAL WAITING 10min')
+                let minutos = 10
+                await sleep(minutos * 60 * 1000)
+                log('')
+            }
+
+            // await sleep(200)
+            // totalAttempts++
+            // lastAttempt = await execAttempt(this, lastAttempt, true)
+            // await sleep(200)
+            // lastAttemptValue = await getValueInput(this);
+            // await sleep(200)
+            // logAttemptAction(totalAttempts, lastAttempt, lastAttemptValue)
+            // await sleep(200)
+
+            clearLossConfig = lossSequenceCount > 1
+
+            if (clearLossConfig) {
                 log('REACHED THE LIMIT LOSS')
                 log('')
                 let count = 8
@@ -242,7 +309,7 @@ async function observer() {
                     await downAttemptValue(this)
                     count--
                 }
-                breakLimitLoss = false
+                clearLossConfig = false
                 lossSequenceCount = 0
             }
 
@@ -252,6 +319,7 @@ async function observer() {
                 await sleep(200)
                 totalAttempts++
                 lastAttempt = await execAttempt(this, lastAttempt, true)
+                // lastAttempt = await execAttempt(this, lastAttempt, Math.floor(Math.random() * 2))
                 await sleep(200)
                 lastAttemptValue = await getValueInput(this);
                 await sleep(200)
@@ -362,6 +430,6 @@ async function initBrowser() {
         headless: false,
         defaultViewport: null,
         ignoreHTTPSErrors: true,
-        args: [`--window-size=${1920},${1080}`]
+        args: [`--window-size=${1920},${1080}`, '--disable-features=site-per-process']
     })
 }
